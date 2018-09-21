@@ -1,14 +1,5 @@
 from flask import Flask, jsonify, abort, make_response
-import peewee
-
-db = peewee.SqliteDatabase("db/data.db")
-
-class Spot(peewee.Model):
-    spotId = peewee.IntegerField()
-    likeCount = peewee.IntegerField()
-
-    class Meta:
-        database = db
+from google.cloud import datastore
 
 app = Flask(__name__)
 
@@ -18,32 +9,39 @@ def default():
 
 @app.route('/api/dev/like/<string:spotId>', methods=['GET'])
 def retLikeCount(spotId):
-    try:
-        spot = Spot.get(Spot.spotId == spotId)
-    except Spot.DoesNotExist:
-        abort(404)
+    ds = datastore.Client()
     
-    result = {
-        "result": True,
-        "data": {
-            "spotId": spot.spotId,
-            "likeCount": spot.likeCount
+    entity = ds.get(ds.key('Spot', spotId))
+    if entity == {}:
+        result = {
+            "result": False
         }
-    }
-
+    else:
+        result = {
+            "result": True,
+            "data": entity
+        }
+        
     return make_response(jsonify(result))
 
 @app.route('/api/dev/like/<string:spotId>', methods=['PUT'])
 def putLikeCount(spotId):
-    try:
-        q = Spot.update(likeCount=Spot.likeCount+1).where(Spot.spotId == spotId)
-        q.execute()
-    except Spot.DoesNotExist:
-        abort(404)
+    ds = datastore.Client()
+    
+    entity = ds.get(ds.key('Spot', spotId))
+    if entity == {}:
+        entity['likeCount'] = 1
+        create = True
+    else:
+        entity['likeCount'] +=  1
+        create = False
+    ds.put(entity)
 
     result = {
         "result": True,
+        "create": create
     }
+
     return make_response(jsonify(result))
 
 if __name__ == '__main__':
